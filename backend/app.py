@@ -241,8 +241,14 @@ class DawidAI:
         return None
 
 app = Flask(__name__)
-CORS(app)
-
+CORS(app, resources={
+    r"/*": {
+        "origins": [
+            "http://localhost:5173",  # dla developmentu
+            "unrivaled-lily-ce9a08.netlify.app"  # twoja domena z Netlify
+        ]
+    }
+})
 # Inicjalizacja Dawida jako globalnej zmiennej
 dawid = DawidAI()
 
