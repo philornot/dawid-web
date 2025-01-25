@@ -11,6 +11,7 @@ const Chat = () => {
   ]);
   
   const messagesEndRef = useRef(null);
+  const inputRef = useRef(null);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -46,6 +47,7 @@ const Chat = () => {
     } finally {
       setLoading(false);
       setInput('');
+      inputRef.current?.focus();
     }
   };
 
@@ -75,6 +77,7 @@ const Chat = () => {
       <form onSubmit={handleSubmit} className="mt-auto">
         <div className="flex gap-2">
           <input
+            ref={inputRef}
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}

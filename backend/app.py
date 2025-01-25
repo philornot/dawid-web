@@ -245,7 +245,7 @@ CORS(app, resources={
     r"/*": {
         "origins": [
             "http://localhost:5173",
-            "https://unrivaled-lily-ce9a08.netlify.app"
+            "https://jestem-dawid.netlify.app"
         ]
     }
 })
