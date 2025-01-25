@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
 const Chat = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -22,12 +24,11 @@ const Chat = () => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    // Dodaj wiadomość użytkownika
     setMessages(prev => [...prev, { role: 'user', content: input }]);
     setLoading(true);
 
     try {
-      const response = await fetch('http://127.0.0.1:5000/chat', {
+      const response = await fetch(`${API_URL}/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: input })
