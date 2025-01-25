@@ -244,8 +244,8 @@ app = Flask(__name__)
 CORS(app, resources={
     r"/*": {
         "origins": [
-            "http://localhost:5173",  # dla developmentu
-            "unrivaled-lily-ce9a08.netlify.app"  # twoja domena z Netlify
+            "http://localhost:5173",
+            "https://unrivaled-lily-ce9a08.netlify.app"
         ]
     }
 })
