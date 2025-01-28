@@ -1,3 +1,29 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer utilities {
+  /* Custom shine animation for input field */
+  .animate-shine {
+    animation: shine 8s ease-in-out infinite;
+  }
+  
+  @keyframes shine {
+    0%, 100% { 
+      transform: translateX(-150%); 
+    }
+    50% { 
+      transform: translateX(150%); 
+    }
+  }
+
+  /* Reduced motion alternatives */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-gradient-flow,
+    .animate-fog,
+    .animate-message-entrance,
+    .animate-shine {
+      animation: none !important;
+    }
+  }
+}
