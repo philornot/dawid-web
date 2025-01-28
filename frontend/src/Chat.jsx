@@ -3,6 +3,37 @@ import { Send, Loader2, Heart } from 'lucide-react';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+// Definicje osobowości chmurek
+const PERSONALITY_TRAITS = {
+  // Jak bardzo chmurka jest zainteresowana kursorem (0-1)
+  CURSOR_INTEREST: 'cursorInterest',
+  // Jak bardzo lubi być blisko innych chmurek (0-1)
+  SOCIABILITY: 'sociability',
+  // Jak szybko się porusza (0.5-2)
+  ENERGY: 'energy',
+  // Jak bardzo jest nieprzewidywalna (0-1)
+  CHAOS: 'chaos',
+  // Jak duży ma "personal space" (0.5-2)
+  PERSONAL_SPACE: 'personalSpace',
+  // Jak bardzo lubi się kręcić (0-1)
+  SPIN_AFFINITY: 'spinAffinity',
+  // Preferowana wysokość lotu (0-1, gdzie 0 to dół ekranu, 1 to góra)
+  HEIGHT_PREFERENCE: 'heightPreference',
+  // Jak bardzo reaguje na podwójne kliknięcie (0.5-2)
+  SCATTER_SENSITIVITY: 'scatterSensitivity',
+};
+
+const generatePersonality = () => ({
+  [PERSONALITY_TRAITS.CURSOR_INTEREST]: 0.3 + Math.random() * 0.7,
+  [PERSONALITY_TRAITS.SOCIABILITY]: Math.random(),
+  [PERSONALITY_TRAITS.ENERGY]: 0.5 + Math.random() * 1.5,
+  [PERSONALITY_TRAITS.CHAOS]: Math.random(),
+  [PERSONALITY_TRAITS.PERSONAL_SPACE]: 0.5 + Math.random() * 1.5,
+  [PERSONALITY_TRAITS.SPIN_AFFINITY]: Math.random(),
+  [PERSONALITY_TRAITS.HEIGHT_PREFERENCE]: Math.random(),
+  [PERSONALITY_TRAITS.SCATTER_SENSITIVITY]: 0.5 + Math.random() * 1.5,
+});
+
 const Chat = () => {
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -11,16 +42,31 @@ const Chat = () => {
     { role: 'bot', content: 'Cześć! Jestem Dawid 😊' }
   ]);
   const [secretMode, setSecretMode] = useState(false);
-
+  const [scatterMode, setScatterMode] = useState(false);
+  
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
   const clickCounter = useRef(0);
-
-  // Referencje do przechowywania pozycji chmurek i kursora
   const cloudsRef = useRef([]);
-  const mousePositionRef = useRef({ x: 0, y: 0 });
+  const mousePositionRef = useRef({ x: window.innerWidth / 2, y: window.innerHeight / 2 });
+  const cloudPersonalities = useRef([]);
+  const cloudStates = useRef([]);
+  const frameRef = useRef();
+  const lastUpdateRef = useRef(Date.now());
 
-  // Efekt do śledzenia pozycji kursora myszy
+  // Inicjalizacja stanów chmurek
+  useEffect(() => {
+    cloudPersonalities.current = Array(8).fill(null).map(generatePersonality);
+    cloudStates.current = Array(8).fill(null).map(() => ({
+      velocity: { x: 0, y: 0 },
+      rotation: 0,
+      rotationVelocity: 0,
+      mood: Math.random(), // Aktualny nastrój (wpływa na kolor)
+      phase: 0, // Faza ruchu sinusoidalnego
+      lastInteractionTime: 0,
+    }));
+  }, []);
+
   useEffect(() => {
     const handleMouseMove = (e) => {
       mousePositionRef.current = { x: e.clientX, y: e.clientY };
@@ -29,54 +75,165 @@ const Chat = () => {
     return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Efekt do animowania chmurek
+  const calculateCloudBehavior = (cloudElement, index, deltaTime) => {
+    if (!cloudElement) return null;
+
+    const personality = cloudPersonalities.current[index];
+    const state = cloudStates.current[index];
+    const rect = cloudElement.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+
+    // Bazowe wektory ruchu
+    let desiredVelocityX = 0;
+    let desiredVelocityY = 0;
+
+    // 1. Przyciąganie do kursora
+    const cursorDX = mousePositionRef.current.x - centerX;
+    const cursorDY = mousePositionRef.current.y - centerY;
+    const cursorDistance = Math.sqrt(cursorDX * cursorDX + cursorDY * cursorDY);
+    
+    if (cursorDistance > 10) {
+      const cursorInfluence = personality.cursorInterest * (1 / (1 + cursorDistance * 0.001));
+      desiredVelocityX += (cursorDX / cursorDistance) * cursorInfluence;
+      desiredVelocityY += (cursorDY / cursorDistance) * cursorInfluence;
+    }
+
+    // 2. Interakcje społeczne z innymi chmurkami
+    cloudsRef.current.forEach((otherCloud, otherIndex) => {
+      if (index === otherIndex) return;
+      const otherElement = otherCloud.current;
+      if (!otherElement) return;
+
+      const otherRect = otherElement.getBoundingClientRect();
+      const otherCenterX = otherRect.left + otherRect.width / 2;
+      const otherCenterY = otherRect.top + otherRect.height / 2;
+      
+      const dx = centerX - otherCenterX;
+      const dy = centerY - otherCenterY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      const otherPersonality = cloudPersonalities.current[otherIndex];
+      const personalSpaceThreshold = 100 * (personality.personalSpace + otherPersonality.personalSpace) / 2;
+
+      if (distance < personalSpaceThreshold) {
+        // Odpychanie gdy za blisko
+        const repulsionForce = (1 - (distance / personalSpaceThreshold)) * 2;
+        desiredVelocityX += (dx / distance) * repulsionForce;
+        desiredVelocityY += (dy / distance) * repulsionForce;
+      } else if (distance < personalSpaceThreshold * 2 && personality.sociability > 0.5) {
+        // Przyciąganie do innych jeśli chmurka jest towarzyska
+        const attractionForce = personality.sociability * 0.5;
+        desiredVelocityX -= (dx / distance) * attractionForce;
+        desiredVelocityY -= (dy / distance) * attractionForce;
+      }
+    });
+
+    // 3. Preferencje wysokości
+    const idealHeight = window.innerHeight * (1 - personality.heightPreference);
+    const heightDiff = centerY - idealHeight;
+    desiredVelocityY -= heightDiff * 0.01;
+
+    // 4. Chaos i nieprzewidywalność
+    const chaosAngle = state.phase + deltaTime * 0.001;
+    state.phase = chaosAngle;
+    desiredVelocityX += Math.sin(chaosAngle) * personality.chaos;
+    desiredVelocityY += Math.cos(chaosAngle) * personality.chaos;
+
+    // Zachowanie podczas rozproszenia
+    if (scatterMode) {
+      const scatterAngle = Math.atan2(centerY - window.innerHeight / 2, centerX - window.innerWidth / 2);
+      const scatterForce = 15 * personality.scatterSensitivity;
+      desiredVelocityX = Math.cos(scatterAngle) * scatterForce;
+      desiredVelocityY = Math.sin(scatterAngle) * scatterForce;
+    }
+
+    // Aplikowanie energii chmurki
+    desiredVelocityX *= personality.energy;
+    desiredVelocityY *= personality.energy;
+
+    // Ograniczenie maksymalnej prędkości
+    const maxSpeed = scatterMode ? 20 : 5 * personality.energy;
+    const currentSpeed = Math.sqrt(desiredVelocityX * desiredVelocityX + desiredVelocityY * desiredVelocityY);
+    if (currentSpeed > maxSpeed) {
+      desiredVelocityX = (desiredVelocityX / currentSpeed) * maxSpeed;
+      desiredVelocityY = (desiredVelocityY / currentSpeed) * maxSpeed;
+    }
+
+    // Płynne przejście do docelowej prędkości
+    state.velocity.x += (desiredVelocityX - state.velocity.x) * 0.1;
+    state.velocity.y += (desiredVelocityY - state.velocity.y) * 0.1;
+
+    // Rotacja
+    const targetRotationVelocity = personality.spinAffinity * 
+      (Math.atan2(state.velocity.y, state.velocity.x) * 20 + Math.sin(state.phase) * 10);
+    state.rotationVelocity += (targetRotationVelocity - state.rotationVelocity) * 0.1;
+    state.rotation += state.rotationVelocity * deltaTime * 0.1;
+
+    // Aktualizacja nastroju
+    state.mood += (Math.random() - 0.5) * 0.1;
+    state.mood = Math.max(0, Math.min(1, state.mood));
+
+    return {
+      x: rect.left + state.velocity.x,
+      y: rect.top + state.velocity.y,
+      rotation: state.rotation,
+      mood: state.mood
+    };
+  };
+
   useEffect(() => {
     const animateClouds = () => {
+      const currentTime = Date.now();
+      const deltaTime = currentTime - lastUpdateRef.current;
+      lastUpdateRef.current = currentTime;
+
       cloudsRef.current.forEach((cloud, index) => {
         const cloudElement = cloud.current;
         if (!cloudElement) return;
 
-        const cloudRect = cloudElement.getBoundingClientRect();
-        const cloudCenterX = cloudRect.left + cloudRect.width / 2;
-        const cloudCenterY = cloudRect.top + cloudRect.height / 2;
+        const newState = calculateCloudBehavior(cloudElement, index, deltaTime);
+        if (!newState) return;
 
-        const mouseX = mousePositionRef.current.x;
-        const mouseY = mousePositionRef.current.y;
-
-        // Oblicz odległość między chmurką a kursorem
-        const distance = Math.sqrt((mouseX - cloudCenterX) ** 2 + (mouseY - cloudCenterY) ** 2);
-
-        // Jeśli kursor jest blisko, chmurka ucieka
-        if (distance < 100) {
-          const angle = Math.atan2(cloudCenterY - mouseY, cloudCenterX - mouseX);
-          const speed = 5; // Szybkość ucieczki
-          const newX = cloudRect.left + Math.cos(angle) * speed;
-          const newY = cloudRect.top + Math.sin(angle) * speed;
-
-          cloudElement.style.left = `${newX}px`;
-          cloudElement.style.top = `${newY}px`;
-        } else {
-          // W przeciwnym razie chmurka podąża za kursorem
-          const speed = 0.5; // Szybkość podążania
-          const deltaX = (mouseX - cloudCenterX) * speed;
-          const deltaY = (mouseY - cloudCenterY) * speed;
-
-          cloudElement.style.left = `${cloudRect.left + deltaX * 0.01}px`;
-          cloudElement.style.top = `${cloudRect.top + deltaY * 0.01}px`;
+        // Odbijanie od granic ekranu
+        const rect = cloudElement.getBoundingClientRect();
+        if (newState.x < 0 || newState.x > window.innerWidth - rect.width) {
+          cloudStates.current[index].velocity.x *= -0.8;
         }
+        if (newState.y < 0 || newState.y > window.innerHeight - rect.height) {
+          cloudStates.current[index].velocity.y *= -0.8;
+        }
+
+        // Aplikowanie nowej pozycji i rotacji
+        cloudElement.style.left = `${newState.x}px`;
+        cloudElement.style.top = `${newState.y}px`;
+        cloudElement.style.transform = `rotate(${newState.rotation}deg) scale(${scatterMode ? 0.8 : 1})`;
+
+        // Kolor bazujący na osobowości i nastroju
+        const personality = cloudPersonalities.current[index];
+        const hue = 260 + personality.cursorInterest * 40 + newState.mood * 20;
+        const saturation = 70 + personality.energy * 20;
+        const lightness = 60 + personality.chaos * 20;
+        cloudElement.style.backgroundColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        cloudElement.style.opacity = 0.7 + personality.energy * 0.2;
       });
 
-      requestAnimationFrame(animateClouds);
+      frameRef.current = requestAnimationFrame(animateClouds);
     };
 
-    animateClouds();
-  }, []);
+    frameRef.current = requestAnimationFrame(animateClouds);
+    return () => cancelAnimationFrame(frameRef.current);
+  }, [scatterMode]);
 
-  // Memoizacja chmurek
+  const handleBackgroundDoubleClick = () => {
+    setScatterMode(true);
+    setTimeout(() => setScatterMode(false), 2000);
+  };
+
   const staticClouds = useMemo(
     () =>
       [...Array(8)].map((_, i) => {
-        const size = 100 + Math.random() * 100;
+        const size = 50 + Math.random() * 30;
         const cloudRef = React.createRef();
         cloudsRef.current[i] = cloudRef;
 
@@ -84,15 +241,16 @@ const Chat = () => {
           <div
             key={i}
             ref={cloudRef}
-            className="absolute rounded-full blur-[40px]"
+            className="absolute rounded-full blur-[20px] transition-colors duration-300"
             style={{
               width: `${size}px`,
               height: `${size}px`,
-              backgroundColor: `hsl(${270 + Math.random() * 30}, 70%, 70%)`,
-              opacity: 0.6,
+              backgroundColor: 'hsl(260, 80%, 70%)',
+              opacity: 0.7,
               mixBlendMode: 'soft-light',
               top: `${Math.random() * 100}%`,
               left: `${Math.random() * 100}%`,
+              transition: 'transform 0.3s ease-out, background-color 0.3s ease-out',
             }}
           />
         );
@@ -100,7 +258,6 @@ const Chat = () => {
     []
   );
 
-  // Reszta kodu pozostaje bez zmian
   useEffect(() => inputRef.current?.focus(), []);
   useEffect(() => scrollToBottom(), [messages]);
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -139,7 +296,7 @@ const Chat = () => {
   };
 
   return (
-    <div className="min-h-screen overflow-hidden relative">
+    <div className="min-h-screen overflow-hidden relative" onDoubleClick={handleBackgroundDoubleClick}>
       <div
         className={`absolute inset-0 ${
           secretMode
