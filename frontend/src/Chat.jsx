@@ -77,17 +77,17 @@ const Chat = () => {
 
   const calculateCloudBehavior = (cloudElement, index, deltaTime) => {
     if (!cloudElement) return null;
-
+  
     const personality = cloudPersonalities.current[index];
     const state = cloudStates.current[index];
     const rect = cloudElement.getBoundingClientRect();
     const centerX = rect.left + rect.width / 2;
     const centerY = rect.top + rect.height / 2;
-
+  
     // Bazowe wektory ruchu
     let desiredVelocityX = 0;
     let desiredVelocityY = 0;
-
+  
     // 1. Przyciąganie do kursora
     const cursorDX = mousePositionRef.current.x - centerX;
     const cursorDY = mousePositionRef.current.y - centerY;
@@ -98,13 +98,13 @@ const Chat = () => {
       desiredVelocityX += (cursorDX / cursorDistance) * cursorInfluence;
       desiredVelocityY += (cursorDY / cursorDistance) * cursorInfluence;
     }
-
+  
     // 2. Interakcje społeczne z innymi chmurkami
     cloudsRef.current.forEach((otherCloud, otherIndex) => {
       if (index === otherIndex) return;
       const otherElement = otherCloud.current;
       if (!otherElement) return;
-
+  
       const otherRect = otherElement.getBoundingClientRect();
       const otherCenterX = otherRect.left + otherRect.width / 2;
       const otherCenterY = otherRect.top + otherRect.height / 2;
@@ -112,10 +112,10 @@ const Chat = () => {
       const dx = centerX - otherCenterX;
       const dy = centerY - otherCenterY;
       const distance = Math.sqrt(dx * dx + dy * dy);
-
+  
       const otherPersonality = cloudPersonalities.current[otherIndex];
       const personalSpaceThreshold = 100 * (personality.personalSpace + otherPersonality.personalSpace) / 2;
-
+  
       if (distance < personalSpaceThreshold) {
         // Odpychanie gdy za blisko
         const repulsionForce = (1 - (distance / personalSpaceThreshold)) * 2;
@@ -128,18 +128,18 @@ const Chat = () => {
         desiredVelocityY -= (dy / distance) * attractionForce;
       }
     });
-
+  
     // 3. Preferencje wysokości
     const idealHeight = window.innerHeight * (1 - personality.heightPreference);
     const heightDiff = centerY - idealHeight;
     desiredVelocityY -= heightDiff * 0.01;
-
+  
     // 4. Chaos i nieprzewidywalność
     const chaosAngle = state.phase + deltaTime * 0.001;
     state.phase = chaosAngle;
     desiredVelocityX += Math.sin(chaosAngle) * personality.chaos;
     desiredVelocityY += Math.cos(chaosAngle) * personality.chaos;
-
+  
     // Zachowanie podczas rozproszenia
     if (scatterMode) {
       const scatterAngle = Math.atan2(centerY - window.innerHeight / 2, centerX - window.innerWidth / 2);
@@ -147,11 +147,11 @@ const Chat = () => {
       desiredVelocityX = Math.cos(scatterAngle) * scatterForce;
       desiredVelocityY = Math.sin(scatterAngle) * scatterForce;
     }
-
+  
     // Aplikowanie energii chmurki
     desiredVelocityX *= personality.energy;
     desiredVelocityY *= personality.energy;
-
+  
     // Ograniczenie maksymalnej prędkości
     const maxSpeed = scatterMode ? 20 : 5 * personality.energy;
     const currentSpeed = Math.sqrt(desiredVelocityX * desiredVelocityX + desiredVelocityY * desiredVelocityY);
@@ -159,24 +159,41 @@ const Chat = () => {
       desiredVelocityX = (desiredVelocityX / currentSpeed) * maxSpeed;
       desiredVelocityY = (desiredVelocityY / currentSpeed) * maxSpeed;
     }
-
+  
     // Płynne przejście do docelowej prędkości
     state.velocity.x += (desiredVelocityX - state.velocity.x) * 0.1;
     state.velocity.y += (desiredVelocityY - state.velocity.y) * 0.1;
-
+  
     // Rotacja
     const targetRotationVelocity = personality.spinAffinity * 
       (Math.atan2(state.velocity.y, state.velocity.x) * 20 + Math.sin(state.phase) * 10);
     state.rotationVelocity += (targetRotationVelocity - state.rotationVelocity) * 0.1;
     state.rotation += state.rotationVelocity * deltaTime * 0.1;
-
+  
     // Aktualizacja nastroju
     state.mood += (Math.random() - 0.5) * 0.1;
     state.mood = Math.max(0, Math.min(1, state.mood));
-
+  
+    // Nowa pozycja chmurki
+    let newX = rect.left + state.velocity.x;
+    let newY = rect.top + state.velocity.y;
+  
+    // Teleportacja przez krawędzie ekranu
+    if (newX + rect.width < 0) {
+      newX = window.innerWidth;
+    } else if (newX > window.innerWidth) {
+      newX = -rect.width;
+    }
+  
+    if (newY + rect.height < 0) {
+      newY = window.innerHeight;
+    } else if (newY > window.innerHeight) {
+      newY = -rect.height;
+    }
+  
     return {
-      x: rect.left + state.velocity.x,
-      y: rect.top + state.velocity.y,
+      x: newX,
+      y: newY,
       rotation: state.rotation,
       mood: state.mood
     };
