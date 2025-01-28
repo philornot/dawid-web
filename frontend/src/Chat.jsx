@@ -1,100 +1,89 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Send, Loader2, Heart } from 'lucide-react';
 
-// Stała URL API, z domyślną wartością localhost:5000, jeśli zmienna środowiskowa nie jest ustawiona
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 const Chat = () => {
-  // Stan przechowujący wprowadzony przez użytkownika tekst
   const [input, setInput] = useState('');
-  // Stan określający, czy trwa ładowanie odpowiedzi od bota
   const [loading, setLoading] = useState(false);
-  // Stan określający, czy bot jest w trybie nauki
   const [isLearning, setIsLearning] = useState(false);
-  // Stan przechowujący historię wiadomości (użytkownika i bota)
   const [messages, setMessages] = useState([
-    { role: 'bot', content: 'Cześć! Jestem Dawid 😊' } // Początkowa wiadomość od bota
+    { role: 'bot', content: 'Cześć! Jestem Dawid 😊' }
   ]);
-  // Stan określający, czy tryb "sekretny" jest aktywny (easter egg)
   const [secretMode, setSecretMode] = useState(false);
 
-  // Referencja do końca listy wiadomości, używana do automatycznego przewijania
   const messagesEndRef = useRef(null);
-  // Referencja do pola input, używana do automatycznego fokusowania
   const inputRef = useRef(null);
-  // Licznik kliknięć używany do aktywowania easter egga
   const clickCounter = useRef(0);
 
-  // Automatyczne przewijanie do końca listy wiadomości przy każdej zmianie `messages`
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  // Referencje do przechowywania pozycji chmurek i kursora
+  const cloudsRef = useRef([]);
+  const mousePositionRef = useRef({ x: 0, y: 0 });
 
-  // Automatyczne fokusowanie pola input po zamontowaniu komponentu
+  // Efekt do śledzenia pozycji kursora myszy
   useEffect(() => {
-    inputRef.current?.focus();
+    const handleMouseMove = (e) => {
+      mousePositionRef.current = { x: e.clientX, y: e.clientY };
+    };
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => window.removeEventListener('mousemove', handleMouseMove);
   }, []);
 
-  // Funkcja do przewijania do końca listy wiadomości
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  // Efekt do animowania chmurek
+  useEffect(() => {
+    const animateClouds = () => {
+      cloudsRef.current.forEach((cloud, index) => {
+        const cloudElement = cloud.current;
+        if (!cloudElement) return;
 
-  // Easter egg: po 7 kliknięciach w wiadomość bota, aktywowany jest tryb "sekretny"
-  const handleSecretClick = () => {
-    clickCounter.current += 1;
-    if (clickCounter.current === 7) {
-      setSecretMode(!secretMode);
-      console.log('Secret mode toggled:', !secretMode); // Logowanie dla debugowania
-    }
-  };
+        const cloudRect = cloudElement.getBoundingClientRect();
+        const cloudCenterX = cloudRect.left + cloudRect.width / 2;
+        const cloudCenterY = cloudRect.top + cloudRect.height / 2;
 
-  // Obsługa wysyłania wiadomości przez użytkownika
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!input.trim()) return; // Ignoruj puste wiadomości
+        const mouseX = mousePositionRef.current.x;
+        const mouseY = mousePositionRef.current.y;
 
-    try {
-      // Dodaj wiadomość użytkownika do historii
-      setMessages((prev) => [...prev, { role: 'user', content: input }]);
-      setLoading(true); // Ustaw stan ładowania na true
+        // Oblicz odległość między chmurką a kursorem
+        const distance = Math.sqrt((mouseX - cloudCenterX) ** 2 + (mouseY - cloudCenterY) ** 2);
 
-      // Wysyłanie wiadomości do API
-      const response = await fetch(`${API_URL}/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input }),
+        // Jeśli kursor jest blisko, chmurka ucieka
+        if (distance < 100) {
+          const angle = Math.atan2(cloudCenterY - mouseY, cloudCenterX - mouseX);
+          const speed = 5; // Szybkość ucieczki
+          const newX = cloudRect.left + Math.cos(angle) * speed;
+          const newY = cloudRect.top + Math.sin(angle) * speed;
+
+          cloudElement.style.left = `${newX}px`;
+          cloudElement.style.top = `${newY}px`;
+        } else {
+          // W przeciwnym razie chmurka podąża za kursorem
+          const speed = 0.5; // Szybkość podążania
+          const deltaX = (mouseX - cloudCenterX) * speed;
+          const deltaY = (mouseY - cloudCenterY) * speed;
+
+          cloudElement.style.left = `${cloudRect.left + deltaX * 0.01}px`;
+          cloudElement.style.top = `${cloudRect.top + deltaY * 0.01}px`;
+        }
       });
 
-      if (!response.ok) {
-        throw new Error('Network response was not ok'); // Obsługa błędów sieciowych
-      }
+      requestAnimationFrame(animateClouds);
+    };
 
-      const data = await response.json();
-      // Dodaj odpowiedź bota do historii
-      setMessages((prev) => [...prev, { role: 'bot', content: data.response }]);
-      setIsLearning(data.state === 'learning'); // Ustaw tryb nauki, jeśli bot jest w trakcie nauki
-    } catch (error) {
-      console.error('Error sending message:', error); // Logowanie błędów
-      // Dodaj komunikat o błędzie do historii
-      setMessages((prev) => [
-        ...prev,
-        { role: 'bot', content: 'Przepraszam, coś poszło nie tak... 😅' },
-      ]);
-    } finally {
-      setLoading(false); // Zakończ ładowanie
-      setInput(''); // Wyczyść pole input
-    }
-  };
+    animateClouds();
+  }, []);
 
-  // Memoizacja obłoczków: generowanie obłoczków tylko raz, aby uniknąć losowych zmian pozycji
+  // Memoizacja chmurek
   const staticClouds = useMemo(
     () =>
       [...Array(8)].map((_, i) => {
         const size = 100 + Math.random() * 100;
+        const cloudRef = React.createRef();
+        cloudsRef.current[i] = cloudRef;
+
         return (
           <div
             key={i}
+            ref={cloudRef}
             className="absolute rounded-full blur-[40px]"
             style={{
               width: `${size}px`,
@@ -108,12 +97,49 @@ const Chat = () => {
           />
         );
       }),
-    [] // Pusta tablica zależności = generuj tylko raz
+    []
   );
+
+  // Reszta kodu pozostaje bez zmian
+  useEffect(() => inputRef.current?.focus(), []);
+  useEffect(() => scrollToBottom(), [messages]);
+  const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+
+  const handleSecretClick = () => {
+    clickCounter.current += 1;
+    if (clickCounter.current === 7) setSecretMode(!secretMode);
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!input.trim()) return;
+
+    try {
+      setMessages((prev) => [...prev, { role: 'user', content: input }]);
+      setLoading(true);
+
+      const response = await fetch(`${API_URL}/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: input }),
+      });
+
+      const data = await response.json();
+      setMessages((prev) => [...prev, { role: 'bot', content: data.response }]);
+      setIsLearning(data.state === 'learning');
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'bot', content: 'Przepraszam, coś poszło nie tak... 😅' },
+      ]);
+    } finally {
+      setLoading(false);
+      setInput('');
+    }
+  };
 
   return (
     <div className="min-h-screen overflow-hidden relative">
-      {/* Tło gradientowe, zmieniające się w zależności od trybu "sekretnego" */}
       <div
         className={`absolute inset-0 ${
           secretMode
@@ -122,15 +148,11 @@ const Chat = () => {
         }`}
       />
 
-      {/* Statyczne obłoczki w tle */}
       <div className="absolute inset-0 pointer-events-none z-10">{staticClouds}</div>
 
-      {/* Główny kontener czatu */}
       <div className="relative z-20 max-w-4xl mx-auto p-4 h-screen flex flex-col">
-        {/* Kontener wiadomości */}
         <div className="relative flex-1 overflow-hidden">
           <div className="absolute inset-0 overflow-y-auto space-y-4 pb-4 px-2">
-            {/* Mapowanie wiadomości */}
             {messages.map((message, index) => (
               <div
                 key={index}
@@ -142,13 +164,11 @@ const Chat = () => {
                 } ${secretMode && 'shadow-lg animate-pulse'} shadow-xl max-w-[80%] break-words`}
               >
                 {message.content}
-                {/* Ikona serca w trybie "sekretnym" */}
                 {secretMode && message.role === 'bot' && (
                   <Heart className="w-4 h-4 ml-2 inline-block text-pink-500" />
                 )}
               </div>
             ))}
-            {/* Wskaźnik ładowania */}
             {loading && (
               <div className="mr-auto bg-white/90 p-4 rounded-2xl max-w-[80%] shadow-xl">
                 <div className="flex items-center gap-2">
@@ -157,12 +177,10 @@ const Chat = () => {
                 </div>
               </div>
             )}
-            {/* Element do automatycznego przewijania */}
             <div ref={messagesEndRef} />
           </div>
         </div>
 
-        {/* Formularz do wysyłania wiadomości */}
         <form onSubmit={handleSubmit} className="mt-4 relative">
           <div className="relative flex items-center gap-2">
             <div className="relative w-full">
@@ -176,7 +194,6 @@ const Chat = () => {
                 disabled={loading}
               />
             </div>
-            {/* Przycisk wysyłania */}
             <button
               type="submit"
               disabled={loading}
