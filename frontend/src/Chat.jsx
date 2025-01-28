@@ -26,7 +26,7 @@ const PERSONALITY_TRAITS = {
 const generatePersonality = () => ({
   [PERSONALITY_TRAITS.CURSOR_INTEREST]: 0.3 + Math.random() * 0.7,
   [PERSONALITY_TRAITS.SOCIABILITY]: Math.random(),
-  [PERSONALITY_TRAITS.ENERGY]: 0.5 + Math.random() * 1.5,
+  [PERSONALITY_TRAITS.ENERGY]: Math.random() * 0.5,
   [PERSONALITY_TRAITS.CHAOS]: Math.random(),
   [PERSONALITY_TRAITS.PERSONAL_SPACE]: 0.5 + Math.random() * 1.5,
   [PERSONALITY_TRAITS.SPIN_AFFINITY]: Math.random(),
