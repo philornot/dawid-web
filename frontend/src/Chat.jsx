@@ -10,28 +10,41 @@ const Chat = () => {
   const [messages, setMessages] = useState([
     { role: 'bot', content: 'Cześć! Jestem Dawid 😊' }
   ]);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 }); // Śledzenie pozycji myszy
+  const [isScattered, setIsScattered] = useState(false); // Stan rozproszenia mgły
   
-  const messagesEndRef = useRef(null);
-  const inputRef = useRef(null);
+  const messagesEndRef = useRef(null); // Ref do przewijania na dół
+  const inputRef = useRef(null); // Ref do inputu
+  const fogContainerRef = useRef(null); // Ref do kontenera mgły
 
   useEffect(() => {
-    inputRef.current?.focus();
+    inputRef.current?.focus(); // Automatyczne ustawienie focusu na input po załadowaniu komponentu
   }, []);
 
   const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); // Przewijanie na dół po nowej wiadomości
   };
 
   useEffect(() => {
-    scrollToBottom();
+    scrollToBottom(); // Przewijanie na dół przy każdej zmianie wiadomości
   }, [messages]);
 
+  // Obsługa ruchu myszy
+  const handleMouseMove = (e) => {
+    if (!fogContainerRef.current) return;
+    const rect = fogContainerRef.current.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100; // Obliczenie pozycji X myszy w procentach
+    const y = ((e.clientY - rect.top) / rect.height) * 100; // Obliczenie pozycji Y myszy w procentach
+    setMousePosition({ x, y }); // Aktualizacja pozycji myszy
+  };
+
+  // Obsługa wysłania wiadomości
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
 
-    setMessages(prev => [...prev, { role: 'user', content: input }]);
-    setLoading(true);
+    setMessages(prev => [...prev, { role: 'user', content: input }]); // Dodanie wiadomości użytkownika
+    setLoading(true); // Ustawienie stanu ładowania
 
     try {
       const response = await fetch(`${API_URL}/chat`, {
@@ -41,10 +54,10 @@ const Chat = () => {
       });
 
       const data = await response.json();
-      setMessages(prev => [...prev, { role: 'bot', content: data.response }]);
-      setIsLearning(data.state === 'learning');
+      setMessages(prev => [...prev, { role: 'bot', content: data.response }]); // Dodanie odpowiedzi bota
+      setIsLearning(data.state === 'learning'); // Ustawienie stanu nauki
     } catch (error) {
-      console.error('Błąd:', error); // Dodano użycie zmiennej error
+      console.error('Błąd:', error);
       setMessages(prev => [...prev, { 
         role: 'bot', 
         content: 'Przepraszam, coś poszło nie tak... 😅' 
@@ -53,27 +66,69 @@ const Chat = () => {
     } finally {
       setLoading(false);
       setInput('');
-      // Naprawiony focus z opóźnieniem na potrzeby renderowania
-      setTimeout(() => inputRef.current?.focus(), 0);
+      setTimeout(() => inputRef.current?.focus(), 0); // Powrót focusu do inputu po wysłaniu wiadomości
     }
   };
 
+  // Nowa funkcja do generowania losowych parametrów obłoczków
+  const generateCloudParams = (i) => ({
+    size: 100 + Math.random() * 100,
+    x: Math.random() * 100,
+    y: Math.random() * 100,
+    hue: 270 + Math.sin(Date.now() / 5000 + i) * 30, // Płynna zmiana odcienia
+    speed: 0.2 + Math.random() * 0.3
+  });
+
+  const handleFogClick = () => {
+    setIsScattered(true);
+    setTimeout(() => setIsScattered(false), 500 + Math.random() * 1500);
+  };
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-[#301367] via-[#8a64e8] to-[#c293ff] animate-gradient-flow overflow-hidden">
-      {/* Animated fog layers */}
-      <div className="absolute inset-0 opacity-20 pointer-events-none -z-10">
-        {[...Array(3)].map((_, i) => (
-          <div 
-            key={i}
-            className={`absolute -top-20 -left-20 w-96 h-96 
-              bg-gradient-to-r from-purple-400/30 to-pink-300/30 
-              rounded-full blur-3xl animate-fog
-              ${i === 0 ? 'animate-delay-1000' : i === 1 ? 'animate-delay-3000' : 'animate-delay-5000'}`}
-          />
-        ))}
+    <div className="min-h-screen overflow-hidden relative" onClick={handleFogClick}>
+      {/* Gradientowe tło */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#301367] via-[#8a64e8] to-[#c293ff] animate-gradient-flow" />
+
+      {/* Kontener obłoczków */}
+      <div 
+        className="absolute inset-0 pointer-events-none z-10"
+        ref={fogContainerRef}
+        onMouseMove={handleMouseMove}
+      >
+        {[...Array(8)].map((_, i) => {
+          const params = generateCloudParams(i);
+          const scatter = isScattered ? {
+            x: (Math.random() - 0.5) * 50,
+            y: (Math.random() - 0.5) * 50,
+            scale: 1 + Math.random() * 0.5
+          } : { x: 0, y: 0, scale: 1 };
+
+          return (
+            <div
+              key={i}
+              className={`absolute rounded-full blur-[40px]
+                transition-all duration-[3000ms] ease-out`}
+              style={{
+                width: `${params.size}px`,
+                height: `${params.size}px`,
+                backgroundColor: `hsl(${params.hue}, 70%, 70%)`,
+                opacity: 0.6,
+                mixBlendMode: 'soft-light',
+                transform: `translate(
+                  ${mousePosition.x * params.speed + scatter.x}%,
+                  ${mousePosition.y * params.speed + scatter.y}%
+                ) scale(${scatter.scale})`,
+                top: `${params.y}%`,
+                left: `${params.x}%`,
+                animation: `fogPulse ${5 + i}s ease-in-out infinite`
+              }}
+            />
+          );
+        })}
       </div>
 
-      <div className="max-w-4xl mx-auto p-4 h-screen flex flex-col relative">
+      {/* Główny kontener czatu */}
+      <div className="relative z-20 max-w-4xl mx-auto p-4 h-screen flex flex-col">
         <div className="relative flex-1 overflow-hidden">
           <div className="absolute inset-0 overflow-y-auto space-y-4 pb-4 px-2">
             {messages.map((message, index) => (
@@ -84,8 +139,8 @@ const Chat = () => {
                   transition-all duration-500 ease-out
                   animate-message-entrance
                   ${message.role === 'user' 
-                    ? 'ml-auto bg-gradient-to-r from-[#8a64e8] to-[#6d28d9] text-white shadow-xl shadow-purple-500/30 max-w-[80%]' 
-                    : 'mr-auto bg-white/90 text-gray-800 shadow-xl shadow-purple-500/10 max-w-[80%]'
+                    ? 'ml-auto bg-gradient-to-r from-[#8a64e8] to-[#6d28d9] text-white shadow-xl shadow-purple-500/30 max-w-[80%] break-words' 
+                    : 'mr-auto bg-white/90 text-gray-800 shadow-xl shadow-purple-500/10 max-w-[80%] break-words'
                   }
                   hover:scale-[1.02] transform-gpu transition-transform duration-300
                 `}
@@ -101,10 +156,11 @@ const Chat = () => {
                 </div>
               </div>
             )}
-            <div ref={messagesEndRef} />
+            <div ref={messagesEndRef} /> {/* Ref do przewijania na dół */}
           </div>
         </div>
 
+        {/* Formularz wysyłania wiadomości */}
         <form onSubmit={handleSubmit} className="mt-4 relative">
           <div className="relative flex items-center gap-2">
             <div className="relative w-full">
@@ -127,7 +183,7 @@ const Chat = () => {
                 "
                 disabled={loading}
               />
-              {/* Shine effect */}
+              {/* Efekt błysku na input */}
               <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-20 pointer-events-none animate-shine"/>
             </div>
             <button 
