@@ -245,7 +245,10 @@ CORS(app, resources={
     r"/*": {
         "origins": [
             "http://localhost:5173",
-            "https://jestem-dawid.netlify.app"
+            "https://jestem-dawid.netlify.app",
+            "http://192.168.1.144",
+            "http://172.17.0.1",
+            "http://100.113.203.25"
         ]
     }
 })
@@ -268,4 +271,4 @@ def health_check():
     return jsonify({'status': 'ok'})
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=False)
