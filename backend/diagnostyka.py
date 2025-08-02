@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 """
-Uruchom mnie, jeśli coś z backendem nie działa.
+POPRAWIONA WERSJA DIAGNOSTYKI DLA WINDOWS
+=========================================
+Naprawione problemy:
+- Używa PowerShell zamiast bash dla komend SSH
+- Prawidłowe formatowanie komend dla Windows
+- Lepsze obsługa timeoutów i błędów SSH
+- Kompatybilność z kluczami SSH w Windows
 """
 
-import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox
-import subprocess
-import requests
 import json
-import threading
-import time
-import re
-from datetime import datetime
-import socket
-import os
 import platform
+import subprocess
+import threading
+import tkinter as tk
+from datetime import datetime
 from pathlib import Path
+from tkinter import ttk, scrolledtext
+
+import requests
 
 
 class DawidDiagnostics:
@@ -139,6 +142,9 @@ class DawidDiagnostics:
                    command=self.check_system_status).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(buttons_frame, text="🔧 Test SSH",
                    command=self.test_ssh_connection).pack(side=tk.LEFT, padx=(0, 10))
+        # Dodaj nowy przycisk do czyszczenia SSH
+        ttk.Button(buttons_frame, text="🚨 Kill SSH",
+                   command=self.kill_ssh_sessions).pack(side=tk.LEFT, padx=(0, 10))
         ttk.Button(buttons_frame, text="🔄 Wyczyść",
                    command=self.clear_output).pack(side=tk.RIGHT)
 
@@ -254,8 +260,8 @@ class DawidDiagnostics:
         except Exception as e:
             return "", str(e), 1
 
-    def run_command_ssh(self, command, target_ip=None):
-        """Uruchom komendę przez SSH - poprawiona wersja dla Windows"""
+    def run_command_ssh(self, command, target_ip=None, timeout=20):
+        """Uruchom komendę przez SSH - ulepszona wersja z lepszą obsługą timeoutów"""
         if self.use_alias_var.get():
             # Użyj aliasu SSH
             ssh_target = self.ssh_alias_var.get()
@@ -270,14 +276,58 @@ class DawidDiagnostics:
         escaped_command = command.replace("'", "''").replace('"', '`"')
 
         if self.is_windows:
-            # Windows PowerShell - poprawne formatowanie
-            ssh_command = f'ssh -o "ConnectTimeout=15" -o "StrictHostKeyChecking=no" -o "UserKnownHostsFile=nul" -o "LogLevel=ERROR" {ssh_target} "{escaped_command}"'
+            # Windows - agresywne opcje SSH dla stabilności
+            ssh_options = [
+                'ConnectTimeout=10',
+                'ServerAliveInterval=5',
+                'ServerAliveCountMax=2',
+                'StrictHostKeyChecking=no',
+                'UserKnownHostsFile=nul',
+                'LogLevel=ERROR',
+                'BatchMode=yes',
+                'PasswordAuthentication=no'
+            ]
+            ssh_opts = ' '.join([f'-o "{opt}"' for opt in ssh_options])
+            ssh_command = f'ssh {ssh_opts} {ssh_target} "{escaped_command}"'
         else:
             # Linux/Mac
-            ssh_command = f"ssh -o ConnectTimeout=15 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR {ssh_target} '{command}'"
+            ssh_command = f"ssh -o ConnectTimeout=10 -o ServerAliveInterval=5 -o ServerAliveCountMax=2 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o BatchMode=yes {ssh_target} '{command}'"
 
-        self.log(f"🔐 SSH: {ssh_target}", "INFO")
-        return self.run_command_local(ssh_command)
+        self.log(f"🔐 SSH: {ssh_target} (timeout: {timeout}s)", "INFO")
+        return self.run_command_local_with_timeout(ssh_command, timeout)
+
+    def run_command_local_with_timeout(self, command, timeout=20):
+        """Uruchom komendę lokalnie z agresywnym timeoutem"""
+        try:
+            if self.is_windows:
+                # W Windows używamy PowerShell z timeoutem
+                powershell_command = f"""
+                $job = Start-Job -ScriptBlock {{ {command} }}
+                if (Wait-Job $job -Timeout {timeout}) {{
+                    Receive-Job $job
+                    Remove-Job $job
+                }} else {{
+                    Stop-Job $job
+                    Remove-Job $job
+                    throw "Command timed out after {timeout} seconds"
+                }}
+                """
+                result = subprocess.run(
+                    ['powershell', '-Command', powershell_command],
+                    capture_output=True, text=True, timeout=timeout + 5,
+                    encoding='utf-8', errors='replace'
+                )
+            else:
+                # Linux/Mac
+                result = subprocess.run(
+                    command, shell=True, capture_output=True,
+                    text=True, timeout=timeout
+                )
+            return result.stdout, result.stderr, result.returncode
+        except subprocess.TimeoutExpired:
+            return "", f"Timeout po {timeout} sekundach - sesja SSH mogła się zawiesić", 1
+        except Exception as e:
+            return "", f"Błąd wykonania: {str(e)}", 1
 
     def find_working_ip(self):
         """Znajdź pierwsze działające IP"""
@@ -352,6 +402,49 @@ class DawidDiagnostics:
             self.log(f"  ❌ {ip}: Error - {e}", "ERROR")
             return False
 
+    def kill_ssh_sessions(self):
+        """Zabij zawieszone sesje SSH"""
+        self.set_status("Czyszczenie sesji SSH...", True)
+        threading.Thread(target=self._kill_ssh_thread, daemon=True).start()
+
+    def _kill_ssh_thread(self):
+        self.log("🚨 === CZYSZCZENIE SESJI SSH ===", "INFO")
+
+        if self.is_windows:
+            # Windows - zabij procesy SSH
+            self.log("🔍 Szukam procesów SSH w Windows...", "INFO")
+            stdout, stderr, code = self.run_command_local_with_timeout(
+                "Get-Process ssh -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.Id -Force; Write-Host \"Killed SSH process $($_.Id)\" }",
+                timeout=10
+            )
+
+            if code == 0:
+                if stdout.strip():
+                    self.log("✅ Zabito procesy SSH:", "SUCCESS")
+                    for line in stdout.strip().split('\n'):
+                        if line.strip():
+                            self.log(f"  • {line}", "INFO")
+                else:
+                    self.log("ℹ️ Brak aktywnych procesów SSH", "INFO")
+            else:
+                self.log("⚠️ Nie udało się sprawdzić procesów SSH", "WARNING")
+
+            # Dodatkowo - wyczyść connection sharing
+            self.log("🧹 Czyszczenie connection sharing...", "INFO")
+            stdout, stderr, code = self.run_command_local_with_timeout(
+                "Remove-Item $env:TEMP\\ssh-* -Recurse -Force -ErrorAction SilentlyContinue",
+                timeout=5
+            )
+
+        else:
+            # Linux/Mac
+            self.log("🔍 Szukam procesów SSH w Linux/Mac...", "INFO")
+            stdout, stderr, code = self.run_command_local_with_timeout("pkill -f 'ssh.*frpi'", timeout=10)
+
+        self.log("✅ Czyszczenie sesji SSH zakończone", "SUCCESS")
+        self.log("💡 Teraz możesz spróbować ponownie test SSH", "ANALYSIS")
+        self.set_status("Czyszczenie SSH zakończone")
+
     def test_ssh_connection(self):
         """Test połączenia SSH"""
         self.set_status("Testowanie SSH...", True)
@@ -366,37 +459,53 @@ class DawidDiagnostics:
             target_ip = self.current_working_ip or self.get_active_ips()[0] if self.get_active_ips() else "brak"
             self.log(f"🎯 Testuję SSH: {self.ssh_user_var.get()}@{target_ip}", "INFO")
 
-        # Test podstawowy - echo
-        stdout, stderr, code = self.run_command_ssh("echo 'SSH test działa'")
+        # Test 1: Szybki test połączenia
+        self.log("1️⃣ Szybki test połączenia SSH...", "INFO")
+        stdout, stderr, code = self.run_command_ssh("echo 'SSH OK'", timeout=15)
 
-        if code == 0 and "SSH test działa" in stdout:
-            self.log("✅ SSH: Połączenie działa!", "SUCCESS")
+        if code == 0 and "SSH OK" in stdout:
+            self.log("✅ SSH: Podstawowe połączenie działa!", "SUCCESS")
 
-            # Test dodatkowy - sprawdź czy jesteśmy w home dir
-            stdout, stderr, code = self.run_command_ssh("pwd && whoami")
+            # Test 2: Informacje o systemie
+            self.log("2️⃣ Sprawdzam system...", "INFO")
+            stdout, stderr, code = self.run_command_ssh("pwd && whoami && uname -a", timeout=10)
             if code == 0:
-                self.log(f"📁 Katalog: {stdout.strip()}", "INFO")
+                lines = stdout.strip().split('\n')
+                self.log(f"📁 Katalog: {lines[0] if lines else 'unknown'}", "INFO")
+                self.log(f"👤 Użytkownik: {lines[1] if len(lines) > 1 else 'unknown'}", "INFO")
+                self.log(f"💻 System: {lines[2] if len(lines) > 2 else 'unknown'}", "INFO")
 
-            # Test dostępu do dawid-app
-            stdout, stderr, code = self.run_command_ssh("ls -la ~/dawid-app/")
+            # Test 3: Dostęp do aplikacji
+            self.log("3️⃣ Sprawdzam dostęp do aplikacji...", "INFO")
+            stdout, stderr, code = self.run_command_ssh("ls -la ~/dawid-app/ | head -5", timeout=10)
             if code == 0 and "app.py" in stdout:
                 self.log("✅ Dostęp do ~/dawid-app/: OK", "SUCCESS")
+
+                # Sprawdź czy aplikacja działa
+                stdout, stderr, code = self.run_command_ssh("ps aux | grep 'app.py' | grep -v grep", timeout=10)
+                if stdout.strip():
+                    self.log("✅ Aplikacja Dawida: DZIAŁA", "SUCCESS")
+                else:
+                    self.log("⚠️ Aplikacja Dawida: NIE DZIAŁA", "WARNING")
+                    self.log("🔧 Rozwiązanie: cd ~/dawid-app && python app.py", "ANALYSIS")
             else:
                 self.log("⚠️ Brak dostępu do ~/dawid-app/ lub brak app.py", "WARNING")
 
         else:
             self.log("❌ SSH: Połączenie nie działa!", "ERROR")
             if stderr:
-                self.log(f"Błąd: {stderr}", "ERROR")
-
-            self.log("🔧 ROZWIĄZANIA:", "ANALYSIS")
-            if self.use_alias_var.get():
-                self.log("1. Sprawdź konfigurację SSH w pliku ~/.ssh/config", "ANALYSIS")
-                self.log("2. Uruchom w PowerShell: ssh frpi", "ANALYSIS")
-                self.log("3. Jeśli nie działa, sprawdź klucze SSH", "ANALYSIS")
-            else:
-                self.log("1. Sprawdź czy SSH działa: ssh filip@192.168.1.144", "ANALYSIS")
-                self.log("2. Sprawdź klucze SSH lub użyj aliasu", "ANALYSIS")
+                if "timeout" in stderr.lower():
+                    self.log("🕒 Problem: Timeout - SSH się zawiesza", "ERROR")
+                    self.log("🔧 ROZWIĄZANIA:", "ANALYSIS")
+                    self.log("1. Sprawdź czy RPi działa: ping 192.168.1.144", "ANALYSIS")
+                    self.log("2. Restartuj SSH: ssh frpi 'sudo systemctl restart ssh'", "ANALYSIS")
+                    self.log("3. Sprawdź konfigurację SSH w ~/.ssh/config", "ANALYSIS")
+                else:
+                    self.log(f"Błąd: {stderr}", "ERROR")
+                    self.log("🔧 ROZWIĄZANIA:", "ANALYSIS")
+                    self.log("1. Sprawdź klucze SSH: ssh-add -l", "ANALYSIS")
+                    self.log("2. Test manualny: ssh frpi", "ANALYSIS")
+                    self.log("3. Sprawdź konfigurację ~/.ssh/config", "ANALYSIS")
 
         self.set_status("Test SSH zakończony")
 
@@ -483,6 +592,7 @@ class DawidDiagnostics:
     def _full_diagnostics_thread(self):
         self.log("🔍 === PEŁNA DIAGNOSTYKA DAWID AI (MULTI-IP) === 🔍", "INFO")
         self.log(f"System: {platform.system()} {platform.release()}", "INFO")
+        self.log(f"Czas: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", "INFO")
         self.log("=" * 60, "INFO")
 
         # Znajdź działające IP
@@ -545,12 +655,13 @@ def main():
     app = DawidDiagnostics(root)
 
     # Instrukcja przy starcie
-    app.log("🎯 Diagnostyka Dawida", "SUCCESS")
+    app.log("Diagnostyka Dawida", "SUCCESS")
     app.log("🚀 QUICK START:")
-    app.log("1. Sprawdź czy IP są poprawne w konfiguracji")
-    app.log("2. Kliknij 'Test SSH' aby sprawdzić połączenie z frpi")
-    app.log("3. Jeśli SSH działa, użyj 'Znajdź Działające IP'")
-    app.log("4. Na końcu 'Pełna Diagnostyka' dla pełnego przeglądu")
+    app.log("1. Jeśli SSH się zawiesza - użyj 'Kill SSH'")
+    app.log("2. Sprawdź czy IP są poprawne w konfiguracji")
+    app.log("3. Kliknij 'Test SSH' aby sprawdzić połączenie z frpi")
+    app.log("4. Jeśli SSH działa, użyj 'Znajdź Działające IP'")
+    app.log("5. Na końcu 'Pełna Diagnostyka' dla pełnego przeglądu")
     app.log("=" * 70)
 
     root.mainloop()
