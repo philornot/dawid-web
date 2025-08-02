@@ -1,20 +1,21 @@
+import json
+import logging
+import math
+import random
+import re
+from enum import Enum
+from pathlib import Path
+from typing import Dict, List, Optional
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import json
-import re
-import random
-import math
-from datetime import datetime
-from pathlib import Path
-import logging
-from dataclasses import dataclass, asdict
-from typing import Dict, List, Optional
-from enum import Enum
+
 
 class ConversationState(Enum):
     NORMAL = "normal"
     LEARNING = "learning"
     CALCULATING = "calculating"
+
 
 class ESFJPersonality:
     GREETING_TEMPLATES = [
@@ -25,7 +26,7 @@ class ESFJPersonality:
         "Witaj! ✨",
         "Co słychać? 😊"
     ]
-    
+
     LEARNING_TEMPLATES = [
         "Nie wiem, nauczysz mnie? 🤔",
         "Pierwsze słyszę! Co to?",
@@ -34,7 +35,7 @@ class ESFJPersonality:
         "Nie znam tego jeszcze!",
         "Wyjaśnisz? 🤗"
     ]
-    
+
     GRATITUDE_TEMPLATES = [
         "Dzięki! 💖",
         "Super, że mi powiedziałeś!",
@@ -55,6 +56,7 @@ class ESFJPersonality:
     @staticmethod
     def get_gratitude() -> str:
         return random.choice(ESFJPersonality.GRATITUDE_TEMPLATES)
+
 
 class MathProcessor:
     def __init__(self):
@@ -133,6 +135,7 @@ class MathProcessor:
             a = values.pop()
             values.append(self.operations[operator](a, b))
 
+
 class DawidAI:
     def __init__(self, data_file: str = "dawid_data.json"):
         self.personality = ESFJPersonality()
@@ -180,7 +183,7 @@ class DawidAI:
                     'response': "Okej, nie ma sprawy! 😊",
                     'state': 'normal'
                 }
-            
+
             self._learn(self.last_question, message)
             self.state = ConversationState.NORMAL
             return {
@@ -218,55 +221,69 @@ class DawidAI:
 
     def _learn(self, question: str, answer: str):
         cleaned_question = re.sub(r'[^\w\s]', '', question.lower()).strip()
-        
+
         if cleaned_question in self.knowledge_base:
             if answer not in self.knowledge_base[cleaned_question]:
                 self.knowledge_base[cleaned_question].append(answer)
         else:
             self.knowledge_base[cleaned_question] = [answer]
-            
+
         self.save_knowledge()
         logging.info(f"Nauczona odpowiedź: {cleaned_question} -> {answer}")
 
     def _get_response(self, question: str) -> Optional[str]:
         cleaned_question = re.sub(r'[^\w\s]', '', question.lower()).strip()
-        
+
         for stored_question, answers in self.knowledge_base.items():
             cleaned_stored = re.sub(r'[^\w\s]', '', stored_question.lower()).strip()
             if cleaned_question == cleaned_stored:
                 response = random.choice(answers)
                 self.save_knowledge()
                 return response
-        
+
         return None
+
 
 app = Flask(__name__)
 CORS(app, resources={
     r"/*": {
         "origins": [
             "http://localhost:5173",
+            "http://localhost:4173",
             "https://jestem-dawid.netlify.app",
-            "http://192.168.1.144"
+            "http://192.168.1.144",
+            "http://100.113.203.25"
         ]
     }
 })
+
 # Inicjalizacja Dawida jako globalnej zmiennej
 dawid = DawidAI()
 
+
 @app.route('/chat', methods=['POST'])
 def chat():
-    data = request.json
-    message = data.get('message', '')
-    
-    if not message:
-        return jsonify({'response': 'Nie otrzymałem wiadomości... 😕', 'state': 'normal'})
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'response': 'Nie otrzymałem danych... 😕', 'state': 'normal'})
 
-    result = dawid.process_message(message)
-    return jsonify(result)
+        message = data.get('message', '')
+
+        if not message:
+            return jsonify({'response': 'Nie otrzymałem wiadomości... 😕', 'state': 'normal'})
+
+        result = dawid.process_message(message)
+        return jsonify(result)
+    except Exception as e:
+        logging.error(f"Błąd w /chat: {e}")
+        return jsonify({'response': 'Wystąpił błąd serwera... 😰', 'state': 'normal'}), 500
+
 
 @app.route('/health', methods=['GET'])
 def health_check():
     return jsonify({'status': 'ok'})
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5000, debug=False)
