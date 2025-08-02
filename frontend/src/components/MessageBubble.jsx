@@ -1,7 +1,8 @@
 const MessageBubble = ({ message, lastError, copyErrorToClipboard }) => {
   const isUser = message.role === "user";
-  const isErrorMessage = message.role === "bot" && 
-    message.content === "Przepraszam, coś poszło nie tak... Sprawdź połączenie z serwerem.";
+  const isErrorMessage =
+    message.role === "bot" &&
+    message.content.includes("Przepraszam, nie mogę się połączyć z serwerem");
 
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
