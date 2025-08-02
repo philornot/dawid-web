@@ -155,27 +155,27 @@ const Chat = () => {
   };
 
   return (
-    <div className="max-w-2xl mx-auto p-4 min-h-screen bg-gradient-to-b from-purple-50 to-purple-100 flex flex-col">
+    <div className="w-full max-w-4xl mx-auto p-2 sm:p-4 min-h-screen bg-gradient-to-b from-purple-50 to-purple-100 flex flex-col">
       {/* Header */}
-      <div className="text-center mb-6">
-        <h1 className="text-2xl font-bold text-purple-800 mb-2">Dawid</h1>
+      <div className="text-center mb-4 sm:mb-6">
+        <h1 className="text-xl sm:text-2xl font-bold text-purple-800 mb-2">Dawid AI</h1>
         <p 
           key={messageKey}
-          className="text-sm text-purple-600 transition-opacity duration-500 ease-in-out animate-fade-in"
+          className="text-xs sm:text-sm text-purple-600 transition-opacity duration-500 ease-in-out animate-fade-in px-2"
         >
           {currentMessage}
         </p>
       </div>
 
       {/* Messages Container */}
-      <div className="flex-1 overflow-y-auto space-y-4 mb-4 px-2">
+      <div className="flex-1 overflow-y-auto space-y-3 sm:space-y-4 mb-3 sm:mb-4 px-1 sm:px-2">
         {messages.map((message) => (
           <div 
             key={message.id}
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div 
-              className={`p-3 rounded-2xl max-w-[80%] break-words shadow-sm ${
+              className={`p-2 sm:p-3 rounded-2xl max-w-[85%] sm:max-w-[80%] break-words shadow-sm text-sm sm:text-base ${
                 message.role === 'user' 
                   ? 'bg-purple-500 text-white rounded-br-sm' 
                   : 'bg-white text-gray-800 rounded-bl-sm border border-purple-200'
@@ -197,14 +197,14 @@ const Chat = () => {
         {/* Loading indicator */}
         {loading && (
           <div className="flex justify-start">
-            <div className="bg-white text-gray-800 p-3 rounded-2xl rounded-bl-sm max-w-[80%] shadow-sm border border-purple-200">
+            <div className="bg-white text-gray-800 p-2 sm:p-3 rounded-2xl rounded-bl-sm max-w-[85%] sm:max-w-[80%] shadow-sm border border-purple-200">
               <div className="flex items-center space-x-2">
                 <div className="flex space-x-1">
-                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
-                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
-                  <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-purple-400 rounded-full animate-bounce"></div>
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></div>
+                  <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-purple-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></div>
                 </div>
-                <span className="text-sm text-gray-600">Dawid pisze...</span>
+                <span className="text-xs sm:text-sm text-gray-600">Dawid pisze...</span>
               </div>
             </div>
           </div>
@@ -214,9 +214,9 @@ const Chat = () => {
       </div>
 
       {/* Input Form */}
-      <div className="mt-auto bg-white rounded-lg shadow-md p-3 border border-purple-200">
+      <div className="mt-auto bg-white rounded-lg shadow-md p-2 sm:p-3 border border-purple-200">
         <form onSubmit={handleSubmit}>
-          <div className="flex gap-3">
+          <div className="flex gap-2 sm:gap-3">
             <input
               ref={inputRef}
               type="text"
@@ -228,21 +228,21 @@ const Chat = () => {
                   ? "Naucz mnie odpowiedzi... (lub napisz 'skip')" 
                   : "Napisz wiadomość do Dawida..."
               }
-              className="flex-1 p-3 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-purple-50 transition-colors"
+              className="flex-1 p-2 sm:p-3 border border-purple-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent bg-purple-50 transition-colors text-sm sm:text-base"
               disabled={loading}
               maxLength={500}
             />
             <button 
               type="submit"
               disabled={loading || !input.trim()}
-              className="px-6 py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
+              className="px-3 sm:px-6 py-2 sm:py-3 bg-purple-500 text-white rounded-lg hover:bg-purple-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium text-sm sm:text-base"
             >
               {loading ? '...' : 'Wyślij'}
             </button>
           </div>
           
           {/* Character counter */}
-          <div className="text-xs text-purple-500 mt-2 text-right">
+          <div className="text-xs text-purple-500 mt-1 sm:mt-2 text-right">
             {input.length}/500 znaków
           </div>
         </form>
