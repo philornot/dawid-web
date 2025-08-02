@@ -33,14 +33,94 @@
     }
   }
 
+  /* Mobile-first touch interactions */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  /* Better scrolling on mobile */
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+    scroll-behavior: smooth;
+  }
+
+  /* Prevent zoom on input focus (iOS Safari) */
+  .no-zoom {
+    font-size: 16px;
+  }
+  
+  @media screen and (max-width: 640px) {
+    .no-zoom {
+      font-size: 16px !important;
+    }
+  }
+
+  /* Custom scrollbar for webkit browsers */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(139, 92, 246, 0.3);
+    border-radius: 3px;
+  }
+  
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: rgba(139, 92, 246, 0.5);
+  }
+
+  /* Safe area insets for devices with notches */
+  .safe-area-top {
+    padding-top: env(safe-area-inset-top);
+  }
+  
+  .safe-area-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
   /* Reduced motion alternatives */
   @media (prefers-reduced-motion: reduce) {
     .animate-gradient-flow,
     .animate-fog,
     .animate-message-entrance,
     .animate-shine,
-    .animate-fade-in {
+    .animate-fade-in,
+    .animate-bounce,
+    .animate-spin {
       animation: none !important;
     }
+  }
+}
+
+/* Global mobile optimizations */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    -ms-text-size-adjust: 100%;
+  }
+  
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior: none;
+  }
+  
+  /* Prevent rubber band scrolling on iOS */
+  body {
+    position: fixed;
+    overflow: hidden;
+    width: 100%;
+    height: 100%;
+  }
+  
+  #root {
+    overflow: auto;
+    height: 100vh;
+    width: 100vw;
+    position: relative;
   }
 }
