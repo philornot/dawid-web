@@ -1,8 +1,10 @@
 const API_ENDPOINTS = [
-  "http://100.113.203.25:5000", // Twój główny adres
-  "http://localhost:5000",       // Fallback lokalny
-  "http://192.168.1.144:5000",   // Fallback sieciowy
+  "https://frpi.taileb095e.ts.net", // Publiczny przez tailscale funnel
+  "http://100.113.203.25:5000",     // fallback lokalny
+  "http://localhost:5000",          // fallback lokalny
+  "http://192.168.1.144:5000"       // fallback sieciowy
 ];
+
 
 class ApiService {
   constructor() {
