@@ -246,9 +246,7 @@ CORS(app, resources={
         "origins": [
             "http://localhost:5173",
             "https://jestem-dawid.netlify.app",
-            "http://192.168.1.144",
-            "http://172.17.0.1",
-            "http://100.113.203.25"
+            "http://192.168.1.144"
         ]
     }
 })

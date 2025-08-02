@@ -4,7 +4,7 @@ import MessagesContainer from "./components/MessagesContainer";
 import ChatInput from "./components/ChatInput";
 import { NORMAL_MESSAGES, LEARNING_MESSAGES } from "./constants/messages";
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
+import { apiService } from "./utils/api";
 
 const Chat = () => {
   const [input, setInput] = useState("");
@@ -106,19 +106,7 @@ const Chat = () => {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_URL}/chat`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message: trimmedInput }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const data = await response.json();
+      const data = await apiService.sendMessage(trimmedInput);
 
       addMessage("bot", data.response);
       setIsLearning(data.state === "learning");
@@ -129,14 +117,14 @@ const Chat = () => {
         message: error.message,
         stack: error.stack,
         timestamp: new Date().toISOString(),
-        url: `${API_URL}/chat`,
+        baseUrl: apiService.baseUrl,
         userMessage: trimmedInput,
       };
       setLastError(errorDetails);
 
       addMessage(
         "bot",
-        "Przepraszam, coś poszło nie tak... Sprawdź połączenie z serwerem."
+        `Przepraszam, nie mogę się połączyć z serwerem... 😰\n\n${error.message}`
       );
       setIsLearning(false);
     } finally {
@@ -160,7 +148,7 @@ const Chat = () => {
 
     const errorText = `=== DAWID DEBUG INFO ===
 Timestamp: ${lastError.timestamp}
-URL: ${lastError.url}
+Base URL: ${lastError.baseUrl}
 User Message: ${lastError.userMessage}
 Error: ${lastError.message}
 Stack: ${lastError.stack}
@@ -182,7 +170,7 @@ Browser: ${navigator.userAgent}
   return (
     <div className="w-full max-w-4xl mx-auto p-3 sm:p-4 min-h-screen bg-gradient-to-b from-purple-50 to-purple-100 flex flex-col">
       <ChatHeader currentMessage={currentMessage} messageKey={messageKey} />
-      
+
       <MessagesContainer
         messages={messages}
         loading={loading}
@@ -190,7 +178,7 @@ Browser: ${navigator.userAgent}
         messagesEndRef={messagesEndRef}
         copyErrorToClipboard={copyErrorToClipboard}
       />
-      
+
       <ChatInput
         input={input}
         loading={loading}
